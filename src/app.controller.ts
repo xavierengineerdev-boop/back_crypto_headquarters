@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Res, Req, HttpStatus } from '@nestjs/common';
 import { AppService } from './app.service';
 import { UserInfoService } from './user-info/user-info.service';
+import { DuplicateCheckService } from './duplicate-check/duplicate-check.service';
+import { LeadsService } from './leads/leads.service';
 import type { Response, Request } from 'express';
 
 @Controller()
@@ -8,6 +10,8 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly userInfoService: UserInfoService,
+    private readonly duplicateCheckService: DuplicateCheckService,
+    private readonly leadsService: LeadsService,
   ) {}
 
   @Get()
@@ -26,8 +30,38 @@ export class AppController {
       }
 
       const userInfo = this.userInfoService.collectUserInfo(req, data);
-      const formattedUserInfo = this.userInfoService.formatUserInfo(userInfo);
+      const ip = userInfo.ip;
 
+      // Проверка на дубликаты по IP через MongoDB
+      const isDuplicate = await this.leadsService.isDuplicate(ip);
+      if (isDuplicate) {
+        const timeUntilNext = await this.leadsService.getTimeUntilNextSubmission(ip);
+        const hoursLeft = Math.ceil(timeUntilNext / (60 * 60 * 1000));
+        
+        return res.status(HttpStatus.CONFLICT).json({
+          success: false,
+          message: `Вы уже отправили заявку. Повторная отправка возможна через ${hoursLeft} ${hoursLeft === 1 ? 'час' : hoursLeft < 5 ? 'часа' : 'часов'}`,
+          code: 'DUPLICATE_SUBMISSION',
+        });
+      }
+
+      // Сохраняем лид в базу данных
+      await this.leadsService.createLead({
+        name: data.name,
+        phone: data.phone,
+        telegram: data.telegram,
+        ip: userInfo.ip,
+        language: userInfo.language,
+        platform: userInfo.platform,
+        resolution: userInfo.resolution,
+        timezone: userInfo.timezone,
+        userAgent: userInfo.userAgent,
+      });
+
+      // Также регистрируем в памяти для совместимости
+      this.duplicateCheckService.registerSubmission(ip);
+
+      const formattedUserInfo = this.userInfoService.formatUserInfo(userInfo);
       const result = await this.appService.sendToTelegram(data, formattedUserInfo);
       
       return res.status(HttpStatus.OK).json({
