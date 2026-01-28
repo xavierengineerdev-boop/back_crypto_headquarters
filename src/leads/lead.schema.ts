@@ -32,6 +32,12 @@ export class Lead {
   @Prop({ required: false })
   userAgent?: string;
 
+  @Prop({ required: false })
+  fbclid?: string;
+
+  @Prop({ required: false })
+  utm_campaign?: string;
+
   @Prop({ default: Date.now })
   createdAt: Date;
 

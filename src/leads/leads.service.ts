@@ -22,6 +22,8 @@ export class LeadsService {
     resolution?: string;
     timezone?: string;
     userAgent?: string;
+    fbclid?: string;
+    utm_campaign?: string;
   }): Promise<LeadDocument> {
     const lead = new this.leadModel(data);
     return lead.save();

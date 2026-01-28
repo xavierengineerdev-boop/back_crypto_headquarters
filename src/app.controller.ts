@@ -29,6 +29,10 @@ export class AppController {
         });
       }
 
+      // Извлекаем fbclid и utm_campaign из query параметров или body
+      const fbclid = (req.query?.fbclid as string) || data.fbclid;
+      const utm_campaign = (req.query?.utm_campaign as string) || data.utm_campaign;
+
       const userInfo = this.userInfoService.collectUserInfo(req, data);
       const ip = userInfo.ip;
 
@@ -56,13 +60,22 @@ export class AppController {
         resolution: userInfo.resolution,
         timezone: userInfo.timezone,
         userAgent: userInfo.userAgent,
+        fbclid: fbclid,
+        utm_campaign: utm_campaign,
       });
 
       // Также регистрируем в памяти для совместимости
       this.duplicateCheckService.registerSubmission(ip);
 
+      // Добавляем fbclid и utm_campaign в данные для отправки в Telegram
+      const telegramData = {
+        ...data,
+        ...(fbclid && { fbclid }),
+        ...(utm_campaign && { utm_campaign }),
+      };
+
       const formattedUserInfo = this.userInfoService.formatUserInfo(userInfo);
-      const result = await this.appService.sendToTelegram(data, formattedUserInfo);
+      const result = await this.appService.sendToTelegram(telegramData, formattedUserInfo);
       
       return res.status(HttpStatus.OK).json({
         success: true,
